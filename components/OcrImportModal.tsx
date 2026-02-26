@@ -163,17 +163,17 @@ const OcrImportModal: React.FC<OcrImportModalProps> = ({
               </div>
               <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xl">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse min-w-[900px]">
+                  <table className="w-full text-left border-collapse table-auto">
                     <thead>
                       <tr className="bg-slate-50/50 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
-                        <th className="px-6 py-4">交易类型</th>
-                        <th className="px-6 py-4">标的代码</th>
-                        <th className="px-6 py-4">成交均价</th>
-                        <th className="px-6 py-4">数量</th>
-                        <th className="px-6 py-4">到期日 (YYMMDD)</th>
-                        <th className="px-6 py-4">行权价</th>
-                        <th className="px-6 py-4">账户/券商</th>
-                        <th className="px-6 py-4 text-center">管理</th>
+                        <th className="px-2 py-4 whitespace-nowrap w-px">交易类型</th>
+                        <th className="px-2 py-4 whitespace-nowrap w-px">标的代码</th>
+                        <th className="px-2 py-4 whitespace-nowrap w-px">成交均价</th>
+                        <th className="px-2 py-4 whitespace-nowrap w-px">数量</th>
+                        <th className="px-2 py-4 whitespace-nowrap w-px">到期日 (YYMMDD)</th>
+                        <th className="px-2 py-4 whitespace-nowrap w-px">行权价</th>
+                        <th className="px-2 py-4 whitespace-nowrap w-px">账户/券商</th>
+                        <th className="px-2 py-4 text-center whitespace-nowrap">管理</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
@@ -182,7 +182,7 @@ const OcrImportModal: React.FC<OcrImportModalProps> = ({
                           const isOption = c.positionType.includes('Call') || c.positionType.includes('Put');
                           return (
                             <tr key={`${sIdx}-${cIdx}`} className="hover:bg-slate-50/50 transition-colors">
-                              <td className="px-6 py-3">
+                              <td className="px-2 py-3 whitespace-nowrap">
                                 <select 
                                   value={c.positionType} 
                                   onChange={e => updateCandidate(sIdx, cIdx, { positionType: e.target.value as PositionType })} 
@@ -196,28 +196,28 @@ const OcrImportModal: React.FC<OcrImportModalProps> = ({
                                   <option value={PositionType.SHORT_PUT}>Short Put (卖出看跌)</option>
                                 </select>
                               </td>
-                              <td className="px-6 py-3">
+                              <td className="px-2 py-3 whitespace-nowrap">
                                 <input type="text" value={c.stockName} onChange={e => updateCandidate(sIdx, cIdx, { stockName: e.target.value.toUpperCase() })} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs font-black uppercase outline-none" />
                               </td>
-                              <td className="px-6 py-3">
-                                <input type="number" step="0.0001" value={c.openPrice} onChange={e => updateCandidate(sIdx, cIdx, { openPrice: parseFloat(e.target.value) })} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs font-bold outline-none" />
+                              <td className="px-2 py-3 whitespace-nowrap">
+                                <input type="number" step="0.0001" value={c.openPrice} onChange={e => updateCandidate(sIdx, cIdx, { openPrice: parseFloat(e.target.value) })} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm font-black text-slate-900 outline-none" />
                               </td>
-                              <td className="px-6 py-3 w-24">
-                                <input type="number" value={c.totalQuantity} onChange={e => updateCandidate(sIdx, cIdx, { totalQuantity: parseInt(e.target.value) })} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs font-bold outline-none" />
+                              <td className="px-2 py-3 w-24 whitespace-nowrap">
+                                <input type="number" value={c.totalQuantity} onChange={e => updateCandidate(sIdx, cIdx, { totalQuantity: parseInt(e.target.value) })} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm font-black text-slate-900 outline-none" />
                               </td>
-                              <td className="px-6 py-3">
-                                {isOption ? <input type="date" value={c.expiryDate || ""} onChange={e => updateCandidate(sIdx, cIdx, { expiryDate: e.target.value })} className="w-full bg-emerald-50/50 border border-emerald-100 rounded-lg p-2 text-[11px] font-bold outline-none" /> : <span className="text-slate-300 text-xs flex justify-center">--</span>}
+                              <td className="px-2 py-3 whitespace-nowrap">
+                                {isOption ? <input type="date" value={c.expiryDate || ""} onChange={e => updateCandidate(sIdx, cIdx, { expiryDate: e.target.value })} className="w-full bg-emerald-50/50 border border-emerald-100 rounded-lg p-2 text-sm font-black text-slate-900 outline-none" /> : <span className="text-slate-300 text-xs flex justify-center">--</span>}
                               </td>
-                              <td className="px-6 py-3">
-                                {isOption ? <input type="number" step="0.5" value={c.strikePrice || ""} onChange={e => updateCandidate(sIdx, cIdx, { strikePrice: parseFloat(e.target.value) })} className="w-full bg-emerald-50/50 border border-emerald-100 rounded-lg p-2 text-xs font-bold outline-none" /> : <span className="text-slate-300 text-xs flex justify-center">--</span>}
+                              <td className="px-2 py-3 whitespace-nowrap">
+                                {isOption ? <input type="number" step="0.5" value={c.strikePrice || ""} onChange={e => updateCandidate(sIdx, cIdx, { strikePrice: parseFloat(e.target.value) })} className="w-full bg-emerald-50/50 border border-emerald-100 rounded-lg p-2 text-sm font-black text-slate-900 outline-none" /> : <span className="text-slate-300 text-xs flex justify-center">--</span>}
                               </td>
-                              <td className="px-6 py-3">
+                              <td className="px-2 py-3 whitespace-nowrap">
                                 <select value={c.broker} onChange={e => updateCandidate(sIdx, cIdx, { broker: e.target.value })} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-[10px] font-bold outline-none">
                                   <option value="">默认账户</option>
                                   {brokers.map(b => <option key={b} value={b}>{b}</option>)}
                                 </select>
                               </td>
-                              <td className="px-6 py-3 text-center">
+                              <td className="px-2 py-3 text-center">
                                 <button onClick={() => removeCandidate(sIdx, cIdx)} className="w-8 h-8 rounded-full text-slate-300 hover:bg-rose-50 hover:text-rose-500 transition-all"><i className="fa-solid fa-trash-can text-xs"></i></button>
                               </td>
                             </tr>

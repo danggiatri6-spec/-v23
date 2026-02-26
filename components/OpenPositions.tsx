@@ -171,16 +171,16 @@ const OpenPositions: React.FC<OpenPositionsProps> = ({
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse min-w-[800px] table-auto">
+        <table className="w-full text-left border-collapse table-auto">
           <thead>
             <tr className="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-200">
-              {selectionMode && <th className="px-1 py-4 w-10">选择</th>}
-              <th className="px-1 py-4 w-[75px]">头寸</th>
-              <th className="px-1 py-4 cursor-pointer" onClick={() => handleSort('ticker')}>标的/券商 {sortIcon('ticker')}</th>
-              <th className="px-1 py-4 w-[75px] cursor-pointer text-left" onClick={() => handleSort('expiry')}>到期日 {sortIcon('expiry')}</th>
-              <th className="px-1 py-4 w-[55px] text-right cursor-pointer" onClick={() => handleSort('quantity')}>数量 {sortIcon('quantity')}</th>
-              <th className="px-1 py-4 w-[80px] text-right">均价</th>
-              <th className="px-1 py-4 text-center w-[130px]">操作</th>
+              {selectionMode && <th className="px-1 py-4 whitespace-nowrap text-center w-px">选择</th>}
+              <th className="px-1 py-4 whitespace-nowrap w-px">头寸</th>
+              <th className="px-1 py-4 cursor-pointer whitespace-nowrap w-px" onClick={() => handleSort('ticker')}>标的/券商 {sortIcon('ticker')}</th>
+              <th className="px-1 py-4 cursor-pointer text-left whitespace-nowrap w-px" onClick={() => handleSort('expiry')}>到期日 {sortIcon('expiry')}</th>
+              <th className="px-1 py-4 text-right cursor-pointer whitespace-nowrap w-px" onClick={() => handleSort('quantity')}>数量 {sortIcon('quantity')}</th>
+              <th className="px-1 py-4 text-right whitespace-nowrap w-px">均价</th>
+              <th className="px-1 py-4 text-center whitespace-nowrap">操作</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -195,10 +195,10 @@ const OpenPositions: React.FC<OpenPositionsProps> = ({
                   )}
                   <td className="px-1 py-4"><span className="bg-blue-50 text-blue-600 text-[10px] font-black px-1 py-0.5 rounded uppercase tracking-tighter">正股</span></td>
                   <td className="px-1 py-4 font-bold text-slate-700 text-xs pr-2 whitespace-nowrap">{s.ticker} {s.broker && <span className="text-[8px] px-1 py-0.5 bg-slate-100 text-slate-400 rounded ml-1">{s.broker}</span>}</td>
-                  <td className="px-1 py-4 text-slate-300 text-[9px] font-bold whitespace-nowrap text-left">--长期--</td>
-                  <td className="px-1 py-4 text-right font-mono text-slate-600 text-xs">{s.quantity}</td>
-                  <td className="px-1 py-4 text-right font-mono text-[10px]">
-                    <div className="font-bold text-slate-800">{cost.toFixed(2)}</div>
+                  <td className="px-1 py-4 text-slate-900 text-xs font-bold whitespace-nowrap text-left">--长期--</td>
+                  <td className="px-1 py-4 text-right font-mono text-slate-900 text-sm whitespace-nowrap">{s.quantity}</td>
+                  <td className="px-1 py-4 text-right font-mono text-sm whitespace-nowrap">
+                    <div className="font-bold text-slate-900">{cost.toFixed(2)}</div>
                   </td>
                   <td className="px-1 py-4">
                     <div className="flex justify-center gap-1">
@@ -221,10 +221,10 @@ const OpenPositions: React.FC<OpenPositionsProps> = ({
                   )}
                   <td className="px-1 py-4"><span className={`text-[9px] font-black px-1 py-0.5 rounded uppercase tracking-tighter ${isShort ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>{isShort ? 'S' : 'B'}{t.positionType.split(' ')[1].charAt(0)}</span></td>
                   <td className="px-1 py-4 font-bold text-slate-700 text-xs pr-2 whitespace-nowrap">{t.stockName} @{t.strikePrice} {t.broker && <span className="text-[8px] px-1 py-0.5 bg-slate-100 text-slate-400 rounded ml-1">{t.broker}</span>}</td>
-                  <td className={`px-1 py-4 text-[10px] font-mono whitespace-nowrap text-left ${soon ? 'text-amber-600 font-bold' : 'text-slate-400'}`}>{t.expiryDate}</td>
-                  <td className="px-1 py-4 text-right font-mono text-slate-600 text-xs">{t.remainingQuantity}</td>
-                  <td className="px-1 py-4 text-right font-mono text-[10px]">
-                    <div className="font-bold text-slate-800">{t.openPrice.toFixed(2)}</div>
+                  <td className={`px-1 py-4 text-sm font-mono whitespace-nowrap text-left ${soon ? 'text-amber-600 font-black' : 'text-slate-900'}`}>{t.expiryDate}</td>
+                  <td className="px-1 py-4 text-right font-mono text-slate-900 text-sm whitespace-nowrap">{t.remainingQuantity}</td>
+                  <td className="px-1 py-4 text-right font-mono text-sm whitespace-nowrap">
+                    <div className="font-bold text-slate-900">{t.openPrice.toFixed(2)}</div>
                   </td>
                   <td className="px-1 py-4">
                     <div className="flex justify-center gap-1">

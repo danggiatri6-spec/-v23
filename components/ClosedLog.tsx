@@ -176,23 +176,23 @@ const ClosedLog: React.FC<ClosedLogProps> = ({ trades, onDeleteTransaction, onDe
 
       <div className="overflow-x-auto">
         {viewMode === 'list' ? (
-          <table className="w-full text-left border-collapse min-w-[800px]">
+          <table className="w-full text-left border-collapse table-auto">
             <thead>
               <tr className="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-200">
-                <th className="px-6 py-4">平仓时间</th>
-                <th className="px-6 py-4">标的 / 券商</th>
-                <th className="px-6 py-4 text-right">开仓价</th>
-                <th className="px-6 py-4 text-right">平仓价</th>
-                <th className="px-6 py-4 text-right">数量</th>
-                <th className="px-6 py-4 text-right">损益金</th>
-                <th className="px-6 py-4 text-center">管理</th>
+                <th className="px-2 py-4 whitespace-nowrap w-px">平仓时间</th>
+                <th className="px-2 py-4 whitespace-nowrap w-px">标的 / 券商</th>
+                <th className="px-2 py-4 text-right whitespace-nowrap w-px">开仓价</th>
+                <th className="px-2 py-4 text-right whitespace-nowrap w-px">平仓价</th>
+                <th className="px-2 py-4 text-right whitespace-nowrap w-px">数量</th>
+                <th className="px-2 py-4 text-right whitespace-nowrap w-px">损益金</th>
+                <th className="px-2 py-4 text-center whitespace-nowrap">管理</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {transactions.map(tx => (
                 <tr key={tx.txId} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-6 py-4 text-xs text-slate-500 font-mono">{tx.closeDate}</td>
-                  <td className="px-6 py-4">
+                  <td className="px-2 py-4 text-sm text-slate-900 font-mono whitespace-nowrap">{tx.closeDate}</td>
+                  <td className="px-2 py-4 whitespace-nowrap">
                     <div className="flex flex-col">
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-slate-800">{tx.stockName}</span>
@@ -203,13 +203,13 @@ const ClosedLog: React.FC<ClosedLogProps> = ({ trades, onDeleteTransaction, onDe
                       </span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-right font-mono text-slate-600">{tx.openPrice.toFixed(2)}</td>
-                  <td className="px-6 py-4 text-right font-mono text-slate-600">{tx.closePrice.toFixed(2)}</td>
-                  <td className="px-6 py-4 text-right font-mono text-slate-600">{tx.quantity}</td>
-                  <td className={`px-6 py-4 text-right font-bold ${tx.profit >= 0 ? COLORS.profit : COLORS.loss}`}>
+                  <td className="px-2 py-4 text-right font-mono text-slate-900 text-sm whitespace-nowrap">{tx.openPrice.toFixed(2)}</td>
+                  <td className="px-2 py-4 text-right font-mono text-slate-900 text-sm whitespace-nowrap">{tx.closePrice.toFixed(2)}</td>
+                  <td className="px-2 py-4 text-right font-mono text-slate-900 text-sm whitespace-nowrap">{tx.quantity}</td>
+                  <td className={`px-2 py-4 text-right font-bold text-sm whitespace-nowrap ${tx.profit >= 0 ? COLORS.profit : COLORS.loss}`}>
                     ${tx.profit.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-2 py-4">
                     <div className="flex justify-center items-center gap-2">
                       <button 
                         onClick={() => {
