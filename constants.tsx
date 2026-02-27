@@ -2,10 +2,12 @@
 import React from 'react';
 
 export const COLORS = {
-  profit: 'text-emerald-600',
-  loss: 'text-rose-600',
+  profit: 'text-emerald-500',
+  loss: 'text-rose-500',
   profitBg: 'bg-emerald-50',
   lossBg: 'bg-rose-50',
+  optionBg: 'bg-violet-50',
+  optionText: 'text-violet-600',
   primary: 'indigo-600',
   secondary: 'slate-600'
 };

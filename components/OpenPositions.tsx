@@ -31,15 +31,11 @@ const OpenPositions: React.FC<OpenPositionsProps> = ({
 }) => {
   const [filterTicker, setFilterTicker] = useState('');
   const [filterBroker, setFilterBroker] = useState('ALL');
-  const [isMerged, setIsMerged] = useState(false);
+  const [viewMode, setViewMode] = useState<'normal' | 'combo'>('combo');
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'ticker', direction: 'asc' });
   
   const [modal, setModal] = useState<{ isOpen: boolean; mode: ModalMode; tradeId?: number; isStock?: boolean; ticker?: string }>({ isOpen: false, mode: 'close' });
   const [formData, setFormData] = useState({ ticker: '', broker: '', price: '', quantity: '', date: new Date().toISOString().split('T')[0], strike: '', expiry: '' });
-
-  const [selectionMode, setSelectionMode] = useState(false);
-  const [selectedTrades, setSelectedTrades] = useState<number[]>([]);
-  const [selectedStocks, setSelectedStocks] = useState<string[]>([]);
 
   const handleSort = (key: SortKey) => setSortConfig(prev => ({ key, direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc' }));
   const sortIcon = (key: SortKey) => {
@@ -68,7 +64,8 @@ const OpenPositions: React.FC<OpenPositionsProps> = ({
 
   const filteredOptions = useMemo(() => {
     let list = trades.filter(t => (t.status === 'open' && t.remainingQuantity > 0 && t.stockName.includes(filterTicker.toUpperCase()) && (filterBroker === 'ALL' || t.broker === filterBroker)));
-    if (isMerged) {
+    
+    if (viewMode === 'normal') {
       const merged: Record<string, any> = {};
       list.forEach(t => {
         const key = `${t.positionType}-${t.stockName}-${t.expiryDate}-${t.strikePrice}-${t.broker || ''}`;
@@ -77,78 +74,101 @@ const OpenPositions: React.FC<OpenPositionsProps> = ({
         merged[key].totalOriginalCost += (t.openPrice * t.remainingQuantity);
         merged[key].ids.push(t.id);
       });
-      list = Object.values(merged).map(m => ({ ...m, remainingQuantity: m.totalRemaining, openPrice: m.totalOriginalCost / m.totalRemaining, isMerged: true }));
+      return Object.values(merged).map(m => ({ 
+        ...m, 
+        remainingQuantity: m.totalRemaining, 
+        displayQuantity: m.totalRemaining,
+        openPrice: m.totalOriginalCost / m.totalRemaining, 
+        isMerged: true,
+        rowSpan: 1,
+        isUnhedged: false
+      })).sort((a, b) => {
+        let c = 0;
+        switch (sortConfig.key) {
+          case 'ticker': c = a.stockName.localeCompare(b.stockName); break;
+          case 'expiry': c = (a.expiryDate || '').localeCompare(b.expiryDate || ''); break;
+          case 'quantity': c = a.displayQuantity - b.displayQuantity; break;
+          case 'price': c = a.openPrice - b.openPrice; break;
+        }
+        return sortConfig.direction === 'asc' ? c : -c;
+      });
     }
-    list.sort((a, b) => {
-      let c = 0;
-      switch (sortConfig.key) {
-        case 'ticker': c = a.stockName.localeCompare(b.stockName); break;
-        case 'expiry': c = (a.expiryDate || '').localeCompare(b.expiryDate || ''); break;
-        case 'quantity': c = a.remainingQuantity - b.remainingQuantity; break;
-        case 'price': c = a.openPrice - b.openPrice; break;
-      }
-      return sortConfig.direction === 'asc' ? c : -c;
-    });
-    return list;
-  }, [trades, filterTicker, filterBroker, isMerged, sortConfig]);
 
-  const combinations = useMemo(() => {
-    const groups: Record<string, Trade[]> = {};
-    const openPuts = trades.filter(t => 
-      t.status === 'open' && 
-      t.remainingQuantity > 0 && 
-      (t.positionType === PositionType.LONG_PUT || t.positionType === PositionType.SHORT_PUT)
-    );
-
-    openPuts.forEach(t => {
-      const key = `${t.stockName}-${t.expiryDate}`;
+    // Combo Mode Logic
+    const groups: Record<string, any[]> = {};
+    list.forEach(t => {
+      const key = `${t.stockName}-${t.expiryDate || 'no-expiry'}`;
       if (!groups[key]) groups[key] = [];
       groups[key].push(t);
     });
 
-    const validCombos: Record<number, Trade[]> = {};
-    Object.values(groups).forEach(group => {
-      const hasLong = group.some(t => t.positionType === PositionType.LONG_PUT);
-      const hasShort = group.some(t => t.positionType === PositionType.SHORT_PUT);
-      if (hasLong && hasShort) {
-        const long = group.find(t => t.positionType === PositionType.LONG_PUT)!;
-        const short = group.find(t => t.positionType === PositionType.SHORT_PUT)!;
-        validCombos[long.id] = [long, short];
-        validCombos[short.id] = [long, short];
-      }
-    });
-    return validCombos;
-  }, [trades]);
-
-  const optionSpans = useMemo(() => {
-    const spans: Record<number, number> = {};
-    const skip = new Set<number>();
+    const finalRows: any[] = [];
     
-    for (let i = 0; i < filteredOptions.length; i++) {
-      if (skip.has(i)) continue;
-      
-      const t = filteredOptions[i];
-      const combo = combinations[t.id];
-      
-      if (combo) {
-        const comboIds = new Set(combo.map(c => c.id));
-        let count = 1;
-        // 检查后续连续的行是否属于同一个组合
-        for (let j = i + 1; j < filteredOptions.length; j++) {
-          if (comboIds.has(filteredOptions[j].id)) {
-            count++;
-            skip.add(j);
-          } else {
-            break;
+    const sortedGroupKeys = Object.keys(groups).sort((a, b) => {
+      const gA = groups[a][0];
+      const gB = groups[b][0];
+      let c = 0;
+      switch (sortConfig.key) {
+        case 'ticker': c = gA.stockName.localeCompare(gB.stockName); break;
+        case 'expiry': c = (gA.expiryDate || '').localeCompare(gB.expiryDate || ''); break;
+        default: c = gA.stockName.localeCompare(gB.stockName);
+      }
+      return sortConfig.direction === 'asc' ? c : -c;
+    });
+
+    sortedGroupKeys.forEach(key => {
+      const group = groups[key];
+      const longs = group.filter(t => t.positionType === PositionType.LONG_PUT).map(t => ({ ...t, rem: t.remainingQuantity }));
+      const shorts = group.filter(t => t.positionType === PositionType.SHORT_PUT).map(t => ({ ...t, rem: t.remainingQuantity }));
+      const others = group.filter(t => t.positionType !== PositionType.LONG_PUT && t.positionType !== PositionType.SHORT_PUT);
+
+      longs.sort((a, b) => (a.strikePrice || 0) - (b.strikePrice || 0));
+      shorts.sort((a, b) => (a.strikePrice || 0) - (b.strikePrice || 0));
+
+      const matchedPairs: { l: any, s: any, qty: number }[] = [];
+
+      for (let l of longs) {
+        for (let s of shorts) {
+          if (l.rem > 0 && s.rem > 0 && l.strikePrice === s.strikePrice) {
+            const qty = Math.min(l.rem, s.rem);
+            matchedPairs.push({ l: { ...l }, s: { ...s }, qty });
+            l.rem -= qty;
+            s.rem -= qty;
           }
         }
-        if (count > 1) {
-          spans[i] = count;
+      }
+
+      for (let l of longs) {
+        for (let s of shorts) {
+          if (l.rem > 0 && s.rem > 0) {
+            const qty = Math.min(l.rem, s.rem);
+            matchedPairs.push({ l: { ...l }, s: { ...s }, qty });
+            l.rem -= qty;
+            s.rem -= qty;
+          }
         }
       }
-    }
-    return { spans, skip };
-  }, [filteredOptions, combinations]);
+
+      matchedPairs.forEach(pair => {
+        const comboPair = [pair.l, pair.s];
+        finalRows.push({ ...pair.l, displayQuantity: pair.qty, isUnhedged: false, comboPair, rowSpan: 2 });
+        finalRows.push({ ...pair.s, displayQuantity: pair.qty, isUnhedged: false, comboPair, rowSpan: 0 });
+      });
+
+      longs.filter(l => l.rem > 0).forEach(l => {
+        finalRows.push({ ...l, displayQuantity: l.rem, isUnhedged: true, rowSpan: 1 });
+      });
+      shorts.filter(s => s.rem > 0).forEach(s => {
+        finalRows.push({ ...s, displayQuantity: s.rem, isUnhedged: true, rowSpan: 1 });
+      });
+      
+      others.forEach(t => {
+        finalRows.push({ ...t, displayQuantity: t.remainingQuantity, isUnhedged: false, rowSpan: 1 });
+      });
+    });
+
+    return finalRows;
+  }, [trades, filterTicker, filterBroker, viewMode, sortConfig]);
 
   const handleActionConfirm = () => {
     const p = parseFloat(formData.price), q = parseFloat(formData.quantity);
@@ -181,53 +201,42 @@ const OpenPositions: React.FC<OpenPositionsProps> = ({
     }
   };
 
-  const toggleSelectTrade = (id: number) => setSelectedTrades(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-  const toggleSelectStock = (key: string) => setSelectedStocks(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
-
-  const handleBatchDelete = () => {
-    const totalCount = selectedTrades.length + selectedStocks.length;
-    if (totalCount === 0) return;
-    if (window.confirm(`确定要删除选中的 ${totalCount} 个持仓记录吗？`)) {
-      selectedTrades.forEach(id => onDeleteTrade(id));
-      selectedStocks.forEach(key => onDeleteStock(key));
-      setSelectedTrades([]);
-      setSelectedStocks([]);
-      setSelectionMode(false);
-    }
-  };
-
   return (
     <div className="p-0">
-      <div className="grid grid-cols-1 md:grid-cols-3 bg-slate-50 border-b border-slate-200">
-        <div className="p-6 border-r border-slate-200 bg-white">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 text-center md:text-left">活跃持仓权利金总计</p>
-          <p className="text-2xl font-black text-indigo-600 text-center md:text-left">${filteredOptions.reduce((acc, t) => acc + (t.openPrice * t.remainingQuantity * 100), 0).toLocaleString()}</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 bg-slate-50 border-b border-slate-200">
+        <div className="p-6 border-r border-slate-200 bg-white hover:-translate-y-1 hover:shadow-xl transition-all duration-300 cursor-default group">
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 text-center md:text-left group-hover:text-indigo-600 transition-colors">活跃持仓权利金总计</p>
+          <p className="text-2xl font-black text-indigo-600 text-center md:text-left font-mono tracking-tight">${filteredOptions.reduce((acc, t) => acc + (t.openPrice * t.displayQuantity * 100), 0).toLocaleString()}</p>
         </div>
-        <div className="p-6 border-r border-slate-200"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 text-center md:text-left">标的代码检索</p><input type="text" placeholder="输入代码搜索..." value={filterTicker} onChange={e => setFilterTicker(e.target.value)} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold outline-none" /></div>
         <div className="p-6 flex flex-col justify-center gap-2">
-           <div className="flex items-center gap-4">
+          <div className="flex flex-row items-end gap-2">
             <div className="flex-1">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 text-center md:text-left">账户/券商筛选</p>
-              <select value={filterBroker} onChange={e => setFilterBroker(e.target.value)} className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-700 outline-none">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">标的代码检索</p>
+              <input type="text" placeholder="输入代码搜索..." value={filterTicker} onChange={e => setFilterTicker(e.target.value)} className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all" />
+            </div>
+            <div className="flex-1">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">账户/券商筛选</p>
+              <select value={filterBroker} onChange={e => setFilterBroker(e.target.value)} className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 transition-all">
                 <option value="ALL">全部券商</option>
                 {Array.from(new Set(trades.concat(Object.values(stockPortfolio) as any).map(x => x.broker).filter(Boolean))).sort().map(b => <option key={b as string} value={b as string}>{b as string}</option>)}
               </select>
             </div>
-            <button onClick={() => setIsMerged(!isMerged)} className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border mt-5 ${isMerged ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-200 text-slate-500'}`}>{isMerged ? '拆分视图' : '合并视图'}</button>
+          </div>
+          <div className="flex bg-white border border-slate-200 rounded-lg p-1 w-fit">
+            <button 
+              onClick={() => setViewMode('normal')} 
+              className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${viewMode === 'normal' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
+            >
+              普通模式
+            </button>
+            <button 
+              onClick={() => setViewMode('combo')} 
+              className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${viewMode === 'combo' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}
+            >
+              组合模式
+            </button>
           </div>
         </div>
-      </div>
-
-      <div className="p-4 bg-white border-b border-slate-100 flex justify-between items-center">
-        <button onClick={() => { setSelectionMode(!selectionMode); setSelectedTrades([]); setSelectedStocks([]); }} className={`px-4 py-1.5 rounded-full text-[10px] font-bold transition-all border ${selectionMode ? 'bg-slate-800 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'}`}>
-          <i className={`fa-solid ${selectionMode ? 'fa-xmark mr-2' : 'fa-list-check mr-2'}`}></i>
-          {selectionMode ? '取消选择' : '批量管理模式'}
-        </button>
-        {selectionMode && (selectedTrades.length > 0 || selectedStocks.length > 0) && (
-          <button onClick={handleBatchDelete} className="px-4 py-1.5 rounded-full bg-rose-500 text-white text-[10px] font-bold shadow-lg shadow-rose-100">
-            彻底删除所选 ({selectedTrades.length + selectedStocks.length})
-          </button>
-        )}
       </div>
 
       <div className="overflow-x-auto">
@@ -235,7 +244,6 @@ const OpenPositions: React.FC<OpenPositionsProps> = ({
           <thead>
             <tr className="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-200">
               <th className="px-1 py-4 whitespace-nowrap w-px text-center">组合</th>
-              {selectionMode && <th className="px-1 py-4 whitespace-nowrap text-center w-px">选择</th>}
               <th className="px-1 py-4 whitespace-nowrap w-px">头寸</th>
               <th className="px-1 py-4 cursor-pointer whitespace-nowrap w-px" onClick={() => handleSort('ticker')}>标的/券商 {sortIcon('ticker')}</th>
               <th className="px-1 py-4 cursor-pointer text-left whitespace-nowrap w-px" onClick={() => handleSort('expiry')}>到期日 {sortIcon('expiry')}</th>
@@ -248,18 +256,13 @@ const OpenPositions: React.FC<OpenPositionsProps> = ({
             {filteredStocks.map(s => {
               const cost = s.totalCost / s.quantity;
               return (
-                <tr key={s.storageKey} className={`hover:bg-slate-50/50 transition-colors ${selectedStocks.includes(s.storageKey) ? 'bg-indigo-50/30' : ''}`}>
+                <tr key={s.storageKey} className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-1 py-4 text-center">
                     <span className="text-[10px] text-slate-300">--</span>
                   </td>
-                  {selectionMode && (
-                    <td className="px-1 py-4 text-center">
-                      <input type="checkbox" checked={selectedStocks.includes(s.storageKey)} onChange={() => toggleSelectStock(s.storageKey)} className="w-4 h-4 rounded border-slate-300 text-indigo-600" />
-                    </td>
-                  )}
                   <td className="px-1 py-4"><span className="bg-blue-50 text-blue-600 text-[10px] font-black px-1 py-0.5 rounded uppercase tracking-tighter">正股</span></td>
-                  <td className="px-1 py-4 font-bold text-slate-700 text-xs pr-2 whitespace-nowrap">{s.ticker} {s.broker && <span className="text-[8px] px-1 py-0.5 bg-slate-100 text-slate-400 rounded ml-1">{s.broker}</span>}</td>
-                  <td className="px-1 py-4 text-slate-900 text-xs font-bold whitespace-nowrap text-left">--长期--</td>
+                  <td className="px-1 py-4 font-bold text-slate-700 text-xs pr-2 whitespace-nowrap">{s.ticker} {s.broker && <span className="text-[8px] px-1 py-0.5 bg-slate-100 text-slate-500 rounded ml-1">{s.broker}</span>}</td>
+                  <td className="px-1 py-4 text-slate-900 text-xs font-bold whitespace-nowrap text-left font-mono">--长期--</td>
                   <td className="px-1 py-4 text-right font-mono text-slate-900 text-sm whitespace-nowrap">{s.quantity}</td>
                   <td className="px-1 py-4 text-right font-mono text-sm whitespace-nowrap">
                     <div className="font-bold text-slate-900">{cost.toFixed(2)}</div>
@@ -276,18 +279,18 @@ const OpenPositions: React.FC<OpenPositionsProps> = ({
             })}
             {filteredOptions.map((t, idx) => {
               const isShort = t.positionType.includes('Short'), soon = t.expiryDate && (new Date(t.expiryDate).getTime() - new Date().getTime()) < 86400000 * 7;
-              const combo = combinations[t.id];
-              const span = optionSpans.spans[idx];
-              const shouldSkip = optionSpans.skip.has(idx);
+              const combo = t.comboPair;
+              const span = t.rowSpan;
+              const shouldSkip = span === 0;
 
               return (
-                <tr key={t.id || idx} className={`hover:bg-slate-50/50 transition-colors ${soon ? 'bg-amber-50/10' : ''} ${selectedTrades.includes(t.id) ? 'bg-indigo-50/30' : ''}`}>
+                <tr key={`${t.id || 'merged'}-${idx}`} className={`hover:bg-slate-50/50 transition-all ${soon ? 'bg-amber-50/10' : ''} ${combo ? 'bg-indigo-50/20' : ''}`}>
                   {!shouldSkip && (
-                    <td className="px-1 py-4 text-center border-r border-slate-100" rowSpan={span}>
+                    <td className={`px-1 py-4 text-center border-r border-slate-100 transition-all ${combo && span > 0 ? 'border-l-4 border-indigo-500' : ''}`} rowSpan={span}>
                       {combo ? (
                         <button 
                           onClick={() => onAnalyzeCombination(combo)}
-                          className="bg-indigo-600 text-white text-[9px] font-black px-1.5 py-1 rounded hover:bg-indigo-700 transition-all shadow-sm shadow-indigo-100 flex items-center gap-1 mx-auto"
+                          className="text-indigo-600 hover:bg-indigo-100/50 text-[9px] font-black px-2 py-1 rounded-md transition-all flex items-center gap-1 mx-auto border border-indigo-100 hover:border-indigo-300"
                           title="分析此组合"
                         >
                           <i className="fa-solid fa-chart-pie"></i> 分析
@@ -297,15 +300,15 @@ const OpenPositions: React.FC<OpenPositionsProps> = ({
                       )}
                     </td>
                   )}
-                  {selectionMode && (
-                    <td className="px-1 py-4 text-center">
-                      <input type="checkbox" checked={selectedTrades.includes(t.id)} onChange={() => toggleSelectTrade(t.id)} className="w-4 h-4 rounded border-slate-300 text-indigo-600" />
-                    </td>
-                  )}
-                  <td className="px-1 py-4"><span className={`text-[9px] font-black px-1 py-0.5 rounded uppercase tracking-tighter ${isShort ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>{isShort ? 'S' : 'B'}{t.positionType.split(' ')[1].charAt(0)}</span></td>
-                  <td className="px-1 py-4 font-bold text-slate-700 text-xs pr-2 whitespace-nowrap">{t.stockName} @{t.strikePrice} {t.broker && <span className="text-[8px] px-1 py-0.5 bg-slate-100 text-slate-400 rounded ml-1">{t.broker}</span>}</td>
+                  <td className="px-1 py-4">
+                    <div className="flex flex-col items-center gap-0.5">
+                      <span className={`text-[9px] font-black px-1 py-0.5 rounded uppercase tracking-tighter ${isShort ? 'bg-rose-50 text-rose-500' : 'bg-emerald-50 text-emerald-500'}`}>{isShort ? 'S' : 'B'}{t.positionType.split(' ')[1].charAt(0)}</span>
+                      {t.isUnhedged && <span className="text-[7px] font-bold text-slate-500 uppercase tracking-tighter">Unhedged</span>}
+                    </div>
+                  </td>
+                  <td className="px-1 py-4 font-bold text-slate-700 text-xs pr-2 whitespace-nowrap">{t.stockName} @{t.strikePrice} {t.broker && <span className="text-[8px] px-1 py-0.5 bg-slate-100 text-slate-500 rounded ml-1">{t.broker}</span>}</td>
                   <td className={`px-1 py-4 text-sm font-mono whitespace-nowrap text-left ${soon ? 'text-amber-600 font-black' : 'text-slate-900'}`}>{t.expiryDate}</td>
-                  <td className="px-1 py-4 text-right font-mono text-slate-900 text-sm whitespace-nowrap">{t.remainingQuantity}</td>
+                  <td className="px-1 py-4 text-right font-mono text-slate-900 text-sm whitespace-nowrap">{t.displayQuantity}</td>
                   <td className="px-1 py-4 text-right font-mono text-sm whitespace-nowrap">
                     <div className="font-bold text-slate-900">{t.openPrice.toFixed(2)}</div>
                   </td>
@@ -339,23 +342,23 @@ const OpenPositions: React.FC<OpenPositionsProps> = ({
                 <>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">标的代码</label>
-                      <input type="text" value={formData.ticker} onChange={e => setFormData({...formData, ticker: e.target.value.toUpperCase()})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold outline-none uppercase"/>
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">标的代码</label>
+                      <input type="text" value={formData.ticker} onChange={e => setFormData({...formData, ticker: e.target.value.toUpperCase()})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold outline-none uppercase focus:ring-2 focus:ring-indigo-500 transition-all"/>
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">所属券商</label>
-                      <input type="text" value={formData.broker} onChange={e => setFormData({...formData, broker: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold outline-none"/>
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">所属券商</label>
+                      <input type="text" value={formData.broker} onChange={e => setFormData({...formData, broker: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all"/>
                     </div>
                   </div>
                   {!modal.isStock && (
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">行权价</label>
-                        <input type="number" step="0.5" value={formData.strike} onChange={e => setFormData({...formData, strike: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold outline-none"/>
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">行权价</label>
+                        <input type="number" step="0.5" value={formData.strike} onChange={e => setFormData({...formData, strike: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-mono"/>
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">到期日</label>
-                        <input type="date" value={formData.expiry} onChange={e => setFormData({...formData, expiry: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold outline-none"/>
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">到期日</label>
+                        <input type="date" value={formData.expiry} onChange={e => setFormData({...formData, expiry: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-mono"/>
                       </div>
                     </div>
                   )}
@@ -363,17 +366,17 @@ const OpenPositions: React.FC<OpenPositionsProps> = ({
               )}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{modal.mode === 'modify' ? '买入均价' : '平仓价格'}</label>
-                  <input type="number" step="0.01" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold outline-none"/>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{modal.mode === 'modify' ? '买入均价' : '平仓价格'}</label>
+                  <input type="number" step="0.01" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-mono"/>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{modal.mode === 'modify' ? '持有数量' : '平仓数量'}</label>
-                  <input type="number" value={formData.quantity} onChange={e => setFormData({...formData, quantity: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold outline-none"/>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{modal.mode === 'modify' ? '持有数量' : '平仓数量'}</label>
+                  <input type="number" value={formData.quantity} onChange={e => setFormData({...formData, quantity: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-mono"/>
                 </div>
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{modal.mode === 'modify' ? '开仓日期' : '平仓日期'}</label>
-                <input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold outline-none"/>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{modal.mode === 'modify' ? '开仓日期' : '平仓日期'}</label>
+                <input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-mono"/>
               </div>
             </div>
             <div className="p-6 bg-slate-50 flex gap-3"><button onClick={() => setModal({ ...modal, isOpen: false })} className="flex-1 py-4 rounded-xl border border-slate-200 bg-white text-slate-500 font-black text-xs uppercase tracking-widest">取消</button><button onClick={handleActionConfirm} className={`flex-1 py-4 rounded-xl text-white font-black text-xs uppercase tracking-widest shadow-lg ${modal.mode === 'modify' ? 'bg-indigo-600 shadow-indigo-100' : 'bg-rose-500 shadow-rose-100'}`}>确认保存</button></div>

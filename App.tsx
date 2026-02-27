@@ -20,6 +20,7 @@ import DataManagement from './components/DataManagement';
 import UserSelector from './components/UserSelector';
 import OcrImportModal from './components/OcrImportModal';
 import StrategyAnalyzer from './components/StrategyAnalyzer';
+import { Skeleton } from './components/Skeleton';
 
 const PROFILES_KEY = 'wealthtrack_pro_v23_profiles';
 const ACTIVE_PROFILE_ID_KEY = 'wealthtrack_active_profile_id';
@@ -315,7 +316,31 @@ const App: React.FC = () => {
           ))}
         </div>
 
-        {isDataReady && (
+        {!isDataReady ? (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden p-6 space-y-6 min-h-[400px]">
+            <div className="flex flex-col md:flex-row gap-4 justify-between">
+              <div className="flex gap-2">
+                <Skeleton className="h-10 w-24 sm:w-32" />
+                <Skeleton className="h-10 w-24 sm:w-32" />
+                <Skeleton className="h-10 w-24 sm:w-32" />
+              </div>
+              <Skeleton className="h-10 w-32" />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-24 w-full" />
+            </div>
+            <div className="space-y-3">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+            </div>
+          </div>
+        ) : (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden min-h-[400px]">
             {activeTab === 'open' && (
               <OpenPositions 

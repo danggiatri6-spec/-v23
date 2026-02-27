@@ -49,7 +49,7 @@ export interface UserProfile {
   avatarColor: string;
 }
 
-export type SummaryTimescale = 'month' | 'week';
+export type SummaryTimescale = 'year' | 'month' | 'week';
 
 // AI Provider Config
 export type AiProviderMode = 'gemini' | 'qwen';
