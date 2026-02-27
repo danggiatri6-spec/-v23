@@ -12,12 +12,14 @@ import {
 import { analyzePortfolio } from './services/geminiService';
 import { performAiOcr } from './services/ocrService';
 import { fetchLatestPrices, MarketUpdate } from './services/marketService';
+import { DEFAULT_BROKERS } from './constants';
 import TradeForm from './components/TradeForm';
 import OpenPositions from './components/OpenPositions';
 import ClosedLog from './components/ClosedLog';
 import DataManagement from './components/DataManagement';
 import UserSelector from './components/UserSelector';
 import OcrImportModal from './components/OcrImportModal';
+import StrategyAnalyzer from './components/StrategyAnalyzer';
 
 const PROFILES_KEY = 'wealthtrack_pro_v23_profiles';
 const ACTIVE_PROFILE_ID_KEY = 'wealthtrack_active_profile_id';
@@ -25,12 +27,12 @@ const AI_CONFIG_KEY = 'wealthtrack_ai_config';
 const DEFAULT_PROFILE: UserProfile = { id: 'default', name: '默认账户', avatarColor: 'bg-indigo-500' };
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'open' | 'closed' | 'add' | 'data'>('open');
+  const [activeTab, setActiveTab] = useState<'open' | 'closed' | 'add' | 'analyzer' | 'data'>('open');
   const [profiles, setProfiles] = useState<UserProfile[]>([]);
   const [currentProfile, setCurrentProfile] = useState<UserProfile>(DEFAULT_PROFILE);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [stockPortfolio, setStockPortfolio] = useState<Record<string, StockHolding>>({});
-  const [brokers, setBrokers] = useState<string[]>([]);
+  const [brokers, setBrokers] = useState<string[]>(DEFAULT_BROKERS);
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [hasNewAnalysis, setHasNewAnalysis] = useState(false);
@@ -44,6 +46,7 @@ const App: React.FC = () => {
   const [isDataReady, setIsDataReady] = useState(false);
   const [lastSaved, setLastSaved] = useState<string>(new Date().toLocaleTimeString());
   const [isSyncingLocal, setIsSyncingLocal] = useState(false);
+  const [analyzerInitialTrades, setAnalyzerInitialTrades] = useState<Trade[] | null>(null);
   
   const [aiConfig, setAiConfig] = useState<AiProviderConfig>({
     mode: 'qwen', 
@@ -118,10 +121,10 @@ const App: React.FC = () => {
         const data: PortfolioData = JSON.parse(savedData);
         setTrades(data.trades || []);
         setStockPortfolio(data.stockPortfolio || {});
-        setBrokers(data.brokers || []);
-      } catch (e) { setTrades([]); setStockPortfolio({}); setBrokers([]); }
+        setBrokers(data.brokers && data.brokers.length > 0 ? data.brokers : DEFAULT_BROKERS);
+      } catch (e) { setTrades([]); setStockPortfolio({}); setBrokers(DEFAULT_BROKERS); }
     } else {
-      setTrades([]); setStockPortfolio({}); setBrokers([]);
+      setTrades([]); setStockPortfolio({}); setBrokers(DEFAULT_BROKERS);
     }
     setAiAnalysis(null);
     setHasNewAnalysis(false);
@@ -301,6 +304,7 @@ const App: React.FC = () => {
             { id: 'open', label: '持仓明细', icon: 'fa-briefcase' },
             { id: 'closed', label: '历史日志', icon: 'fa-clock-rotate-left' },
             { id: 'add', label: '手动录入', icon: 'fa-plus-circle', badge: hasOcrResults },
+            { id: 'analyzer', label: '策略分析', icon: 'fa-chart-area' },
             { id: 'data', label: '系统设置', icon: 'fa-sliders' }
           ].map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`relative flex-1 min-w-[60px] px-1 sm:px-5 py-2.5 sm:py-2 rounded-lg text-[11px] sm:text-sm font-bold transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 whitespace-nowrap ${activeTab === tab.id ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-600 hover:text-slate-700'}`}>
@@ -323,12 +327,38 @@ const App: React.FC = () => {
                 onBatchUpdateTrades={(upds) => setTrades(prev => { const n = [...prev]; upds.forEach(u => { const i = n.findIndex(t => t.id === u.id); if (i !== -1) n[i] = {...n[i], ...u.data}; }); return n; })} 
                 onUpdateStock={(ok, q, c, t, b) => setStockPortfolio(prev => { const n = {...prev}; const s = (t || ok.split('(')[0]).toUpperCase(); const k = b ? `${s}(${b})` : s; if (k !== ok) delete n[ok]; if (q <= 0) { delete n[k]; return n; } n[k] = { quantity: q, totalCost: c, broker: b }; return n; })} 
                 onDeleteStock={(k) => setStockPortfolio(prev => { const n = {...prev}; delete n[k]; return n; })}
+                onAnalyzeCombination={(selectedTrades) => {
+                  setAnalyzerInitialTrades(selectedTrades);
+                  setActiveTab('analyzer');
+                }}
               />
             )}
             {activeTab === 'closed' && (
               <ClosedLog trades={trades} onDeleteTrade={(id) => setTrades(prev => prev.filter(t => t.id !== id))} onDeleteTransaction={(tid, txid) => setTrades(prev => prev.map(t => (t.id === tid) ? {...t, status: 'open', remainingQuantity: t.remainingQuantity + t.closeTransactions.find(x => x.txId === txid)!.quantity, closeTransactions: t.closeTransactions.filter(x => x.txId !== txid)} : t))} />
             )}
-            {activeTab === 'add' && <div className="p-4 sm:p-8 max-w-2xl mx-auto"><div className="flex items-center justify-between mb-8"><h2 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2"><i className="fa-solid fa-circle-plus text-indigo-600"></i> 新增仓位</h2><button onClick={() => setShowOcrModal(true)} className="relative bg-indigo-600 hover:bg-indigo-700 text-white font-black px-4 py-2 rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-lg transition-all"><i className="fa-solid fa-camera"></i> OCR 截图导入</button></div><TradeForm brokers={brokers} onSave={handleSaveTrade} /></div>}
+            {activeTab === 'add' && (
+              <div className="p-4 sm:p-8 max-w-2xl mx-auto">
+                <div className="flex items-center justify-between mb-8">
+                  <h2 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2">
+                    <i className="fa-solid fa-circle-plus text-indigo-600"></i> 新增仓位
+                  </h2>
+                  <button onClick={() => setShowOcrModal(true)} className="relative bg-indigo-600 hover:bg-indigo-700 text-white font-black px-4 py-2 rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-lg transition-all">
+                    <i className="fa-solid fa-camera"></i> OCR 截图导入
+                  </button>
+                </div>
+                <TradeForm brokers={brokers} onSave={handleSaveTrade} />
+              </div>
+            )}
+            {activeTab === 'analyzer' && (
+              <div className="p-4 sm:p-8 max-w-6xl mx-auto">
+                <StrategyAnalyzer 
+                  trades={trades} 
+                  marketUpdate={marketUpdate} 
+                  initialTrades={analyzerInitialTrades}
+                  onClearInitial={() => setAnalyzerInitialTrades(null)}
+                />
+              </div>
+            )}
             {activeTab === 'data' && <DataManagement aiConfig={aiConfig} onUpdateAiConfig={setAiConfig} trades={trades} stockPortfolio={stockPortfolio} brokers={brokers} currentProfile={currentProfile} onAddBroker={(n) => setBrokers(p => [...p, n])} onDeleteBroker={(n) => setBrokers(p => p.filter(b => b !== n))} onImport={(d) => { setTrades(d.trades); setStockPortfolio(d.stockPortfolio); setBrokers(d.brokers || []); setActiveTab('open'); }} />}
           </div>
         )}

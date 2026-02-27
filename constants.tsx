@@ -17,3 +17,5 @@ export const ICONS = {
   loss: <i className="fa-solid fa-circle-xmark text-rose-500"></i>,
   risk: <i className="fa-solid fa-triangle-exclamation text-amber-500"></i>
 };
+
+export const DEFAULT_BROKERS = ['富途', '哈富', '华盛', '长桥HK', '长桥SG', '老虎', '盈立'];

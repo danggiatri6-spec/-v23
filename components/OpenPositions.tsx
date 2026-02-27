@@ -16,6 +16,7 @@ interface OpenPositionsProps {
   onBatchUpdateTrades: (updates: { id: number; data: Partial<Trade> }[]) => void;
   onUpdateStock: (oldKey: string, quantity: number, totalCost: number, ticker?: string, broker?: string) => void;
   onDeleteStock: (storageKey: string) => void;
+  onAnalyzeCombination: (trades: Trade[]) => void;
 }
 
 type SortKey = 'ticker' | 'expiry' | 'quantity' | 'price';
@@ -25,7 +26,8 @@ type ModalMode = 'close' | 'modify';
 const OpenPositions: React.FC<OpenPositionsProps> = ({ 
   trades, stockPortfolio, brokers: registeredBrokers,
   marketUpdate, isFetchingPrices, onMarketSync,
-  onUpdateTrade, onDeleteTrade, onUpdateStock, onDeleteStock
+  onUpdateTrade, onDeleteTrade, onUpdateStock, onDeleteStock,
+  onAnalyzeCombination
 }) => {
   const [filterTicker, setFilterTicker] = useState('');
   const [filterBroker, setFilterBroker] = useState('ALL');
@@ -89,6 +91,64 @@ const OpenPositions: React.FC<OpenPositionsProps> = ({
     });
     return list;
   }, [trades, filterTicker, filterBroker, isMerged, sortConfig]);
+
+  const combinations = useMemo(() => {
+    const groups: Record<string, Trade[]> = {};
+    const openPuts = trades.filter(t => 
+      t.status === 'open' && 
+      t.remainingQuantity > 0 && 
+      (t.positionType === PositionType.LONG_PUT || t.positionType === PositionType.SHORT_PUT)
+    );
+
+    openPuts.forEach(t => {
+      const key = `${t.stockName}-${t.expiryDate}`;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(t);
+    });
+
+    const validCombos: Record<number, Trade[]> = {};
+    Object.values(groups).forEach(group => {
+      const hasLong = group.some(t => t.positionType === PositionType.LONG_PUT);
+      const hasShort = group.some(t => t.positionType === PositionType.SHORT_PUT);
+      if (hasLong && hasShort) {
+        const long = group.find(t => t.positionType === PositionType.LONG_PUT)!;
+        const short = group.find(t => t.positionType === PositionType.SHORT_PUT)!;
+        validCombos[long.id] = [long, short];
+        validCombos[short.id] = [long, short];
+      }
+    });
+    return validCombos;
+  }, [trades]);
+
+  const optionSpans = useMemo(() => {
+    const spans: Record<number, number> = {};
+    const skip = new Set<number>();
+    
+    for (let i = 0; i < filteredOptions.length; i++) {
+      if (skip.has(i)) continue;
+      
+      const t = filteredOptions[i];
+      const combo = combinations[t.id];
+      
+      if (combo) {
+        const comboIds = new Set(combo.map(c => c.id));
+        let count = 1;
+        // 检查后续连续的行是否属于同一个组合
+        for (let j = i + 1; j < filteredOptions.length; j++) {
+          if (comboIds.has(filteredOptions[j].id)) {
+            count++;
+            skip.add(j);
+          } else {
+            break;
+          }
+        }
+        if (count > 1) {
+          spans[i] = count;
+        }
+      }
+    }
+    return { spans, skip };
+  }, [filteredOptions, combinations]);
 
   const handleActionConfirm = () => {
     const p = parseFloat(formData.price), q = parseFloat(formData.quantity);
@@ -174,6 +234,7 @@ const OpenPositions: React.FC<OpenPositionsProps> = ({
         <table className="w-full text-left border-collapse table-auto">
           <thead>
             <tr className="bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-widest border-b border-slate-200">
+              <th className="px-1 py-4 whitespace-nowrap w-px text-center">组合</th>
               {selectionMode && <th className="px-1 py-4 whitespace-nowrap text-center w-px">选择</th>}
               <th className="px-1 py-4 whitespace-nowrap w-px">头寸</th>
               <th className="px-1 py-4 cursor-pointer whitespace-nowrap w-px" onClick={() => handleSort('ticker')}>标的/券商 {sortIcon('ticker')}</th>
@@ -188,6 +249,9 @@ const OpenPositions: React.FC<OpenPositionsProps> = ({
               const cost = s.totalCost / s.quantity;
               return (
                 <tr key={s.storageKey} className={`hover:bg-slate-50/50 transition-colors ${selectedStocks.includes(s.storageKey) ? 'bg-indigo-50/30' : ''}`}>
+                  <td className="px-1 py-4 text-center">
+                    <span className="text-[10px] text-slate-300">--</span>
+                  </td>
                   {selectionMode && (
                     <td className="px-1 py-4 text-center">
                       <input type="checkbox" checked={selectedStocks.includes(s.storageKey)} onChange={() => toggleSelectStock(s.storageKey)} className="w-4 h-4 rounded border-slate-300 text-indigo-600" />
@@ -212,8 +276,27 @@ const OpenPositions: React.FC<OpenPositionsProps> = ({
             })}
             {filteredOptions.map((t, idx) => {
               const isShort = t.positionType.includes('Short'), soon = t.expiryDate && (new Date(t.expiryDate).getTime() - new Date().getTime()) < 86400000 * 7;
+              const combo = combinations[t.id];
+              const span = optionSpans.spans[idx];
+              const shouldSkip = optionSpans.skip.has(idx);
+
               return (
                 <tr key={t.id || idx} className={`hover:bg-slate-50/50 transition-colors ${soon ? 'bg-amber-50/10' : ''} ${selectedTrades.includes(t.id) ? 'bg-indigo-50/30' : ''}`}>
+                  {!shouldSkip && (
+                    <td className="px-1 py-4 text-center border-r border-slate-100" rowSpan={span}>
+                      {combo ? (
+                        <button 
+                          onClick={() => onAnalyzeCombination(combo)}
+                          className="bg-indigo-600 text-white text-[9px] font-black px-1.5 py-1 rounded hover:bg-indigo-700 transition-all shadow-sm shadow-indigo-100 flex items-center gap-1 mx-auto"
+                          title="分析此组合"
+                        >
+                          <i className="fa-solid fa-chart-pie"></i> 分析
+                        </button>
+                      ) : (
+                        <span className="text-[10px] text-slate-300">--</span>
+                      )}
+                    </td>
+                  )}
                   {selectionMode && (
                     <td className="px-1 py-4 text-center">
                       <input type="checkbox" checked={selectedTrades.includes(t.id)} onChange={() => toggleSelectTrade(t.id)} className="w-4 h-4 rounded border-slate-300 text-indigo-600" />
@@ -252,11 +335,46 @@ const OpenPositions: React.FC<OpenPositionsProps> = ({
               <button onClick={() => setModal({ ...modal, isOpen: false })} className="p-2"><i className="fa-solid fa-xmark"></i></button>
             </div>
             <div className="p-6 space-y-4">
+              {modal.mode === 'modify' && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">标的代码</label>
+                      <input type="text" value={formData.ticker} onChange={e => setFormData({...formData, ticker: e.target.value.toUpperCase()})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold outline-none uppercase"/>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">所属券商</label>
+                      <input type="text" value={formData.broker} onChange={e => setFormData({...formData, broker: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold outline-none"/>
+                    </div>
+                  </div>
+                  {!modal.isStock && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">行权价</label>
+                        <input type="number" step="0.5" value={formData.strike} onChange={e => setFormData({...formData, strike: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold outline-none"/>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">到期日</label>
+                        <input type="date" value={formData.expiry} onChange={e => setFormData({...formData, expiry: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold outline-none"/>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">成交均价</label><input type="number" step="0.01" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold outline-none"/></div>
-                <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">成交数量</label><input type="number" value={formData.quantity} onChange={e => setFormData({...formData, quantity: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold outline-none"/></div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{modal.mode === 'modify' ? '买入均价' : '平仓价格'}</label>
+                  <input type="number" step="0.01" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold outline-none"/>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{modal.mode === 'modify' ? '持有数量' : '平仓数量'}</label>
+                  <input type="number" value={formData.quantity} onChange={e => setFormData({...formData, quantity: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold outline-none"/>
+                </div>
               </div>
-              <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">交易日期</label><input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold outline-none"/></div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{modal.mode === 'modify' ? '开仓日期' : '平仓日期'}</label>
+                <input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm font-bold outline-none"/>
+              </div>
             </div>
             <div className="p-6 bg-slate-50 flex gap-3"><button onClick={() => setModal({ ...modal, isOpen: false })} className="flex-1 py-4 rounded-xl border border-slate-200 bg-white text-slate-500 font-black text-xs uppercase tracking-widest">取消</button><button onClick={handleActionConfirm} className={`flex-1 py-4 rounded-xl text-white font-black text-xs uppercase tracking-widest shadow-lg ${modal.mode === 'modify' ? 'bg-indigo-600 shadow-indigo-100' : 'bg-rose-500 shadow-rose-100'}`}>确认保存</button></div>
           </div>

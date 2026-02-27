@@ -3,7 +3,8 @@
   "id": "https://resplendent-cactus-5f6399.netlify.app/",
   "scope": "/",
   "short_name": "WealthTrack",
-  "name": "WealthTrack Pro v24 - 智能交易追踪",
+  "name": "WealthTrack Pro - 智能交易追踪",
+  "description": "专业的期权与股票交易持仓追踪及策略分析工具",
   "icons": [
     {
       "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiB2aWV3Qm94PSIwIDAgNTEyIDUxMiI+PHJlY3Qgd2lkdGg9IjUxMiIgaGVpZ2h0PSI1MTIiIGZpbGw9IiM0ZjQ2ZTUiIHJ4PSIxMTIiLz48cGF0aCBkPSJNMTEwIDE0MGgyOTJ2MjMySDExMHoiIGZpbGw9Im5vbmUiLz48cGF0aCBkPSJNMzgyIDExMEgxMzBjLTIyIDAtNDAgMTgtNDAgNDB2MjA0YzAgMjIgMTggNDAgNDAgNDBoMjUyYzIyIDAgNDAtMTggNDAtNDBWMTUwYzAtMjItMTgtNDAtNDAtNDB6bS0yMCAyNDhIMTUwdi00MGgyMTJ2NDB6bTAtNjRIMTUwdi00MGgyMTJ2NDB6bTAtNjRIMTUwdi00MGgyMTJ2NDB6IiBmaWxsPSIjZmZmIi8+PC9zdmc+",
@@ -12,7 +13,7 @@
       "purpose": "any maskable"
     }
   ],
-  "start_url": "./index.html",
+  "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
   "theme_color": "#4f46e5",
